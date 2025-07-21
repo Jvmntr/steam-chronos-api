@@ -1,0 +1,39 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        Int      @id @default(autoincrement()) // Chave primária auto-incremental
+  steamId   String   @unique // A ID64 da Steam do usuário, deve ser única
+  name      String?  // Nome do usuário, opcional
+
+  snapshots PlaytimeSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Game {
+  id    Int    @id @default(autoincrement()) // Chave primária
+  appId Int    @unique // A ID oficial do jogo na Steam, deve ser única
+  name  String // O nome do jogo
+
+  snapshots PlaytimeSnapshot[]
+}
+
+model PlaytimeSnapshot {
+  id             Int      @id @default(autoincrement()) // Chave primária
+  valueInMinutes Int      // O valor do "playtime_forever" em minutos
+  createdAt      DateTime @default(now()) // Data e hora em que o registro foi criado
+
+  gameId Int
+  game   Game @relation(fields: [gameId], references: [id])
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+}
