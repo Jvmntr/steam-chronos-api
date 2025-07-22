@@ -6,8 +6,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
-import { WeeklyReportItemDto } from './dto/weekly-report-item.dto';
 import { SummaryDto } from './dto/summary.dto';
+import { ReportItemDto } from './dto/report-item.dto';
+import { Prisma } from '@prisma/client';
+import { ActivityByDayDto } from './dto/activity-by-day.dto';
+
+type ReportPeriod = 'weekly' | 'monthly' | 'yearly';
 
 @Injectable()
 export class DashboardService {
@@ -50,12 +54,13 @@ export class DashboardService {
     };
   }
 
-  async getWeeklyReport(
+  async getReport(
     steamId: string,
     date: string,
-  ): Promise<WeeklyReportItemDto[]> {
+    period: ReportPeriod,
+  ): Promise<ReportItemDto[]> {
     this.logger.log(
-      `Iniciando getWeeklyReport para steamId: ${steamId} com data: ${date}`,
+      `Iniciando getReport para steamId: ${steamId}, data: ${date}, período: ${period}`,
     );
     if (!date) {
       throw new BadRequestException('A data é um parâmetro obrigatório.');
@@ -71,7 +76,22 @@ export class DashboardService {
     const endDate = new Date(date);
     endDate.setUTCHours(23, 59, 59, 999);
     const startDate = new Date(endDate);
-    startDate.setDate(endDate.getDate() - 7);
+
+    switch (period) {
+      case 'weekly':
+        startDate.setDate(endDate.getDate() - 7);
+        break;
+      case 'monthly':
+        startDate.setMonth(endDate.getMonth() - 1);
+        break;
+      case 'yearly':
+        startDate.setFullYear(endDate.getFullYear() - 1);
+        break;
+      default:
+        throw new BadRequestException(
+          'Período inválido. Use "weekly", "monthly" ou "yearly".',
+        );
+    }
 
     this.logger.debug(
       `Buscando relatório para o período de ${startDate.toISOString()} a ${endDate.toISOString()}`,
@@ -101,49 +121,69 @@ export class DashboardService {
       },
     });
 
-    this.logger.debug(
-      `Prisma encontrou ${gamesWithPlaytime.length} jogos com snapshots no período.`,
-    );
-
-    if (gamesWithPlaytime.length === 0) {
-      this.logger.warn(
-        'Nenhum jogo retornado pela query do Prisma. Verifique o intervalo de datas e se os dados existem.',
-      );
-      return [];
-    }
-
-    const processedGames = gamesWithPlaytime.map((game) => {
-      if (game.snapshots.length < 2) {
-        this.logger.debug(
-          `Jogo "${game.name}" tem menos de 2 snapshots (${game.snapshots.length}) e será ignorado.`,
-        );
-        return null;
-      }
-
-      const firstSnapshot = game.snapshots[0].valueInMinutes;
-      const lastSnapshot =
-        game.snapshots[game.snapshots.length - 1].valueInMinutes;
-      const playedTime = lastSnapshot - firstSnapshot;
-
-      this.logger.debug(
-        `Jogo: "${game.name}" | Snapshots: ${
-          game.snapshots.length
-        } | Início: ${firstSnapshot} min | Fim: ${lastSnapshot} min | Tempo Jogado: ${playedTime} min`,
-      );
-
-      return {
-        gameId: game.id,
-        name: game.name,
-        appId: game.appId,
-        playedTimeInMinutes: playedTime,
-      };
-    });
-
-    const weeklyReport = processedGames
+    const report = gamesWithPlaytime
+      .map((game) => {
+        if (game.snapshots.length < 2) return null;
+        const firstSnapshot = game.snapshots[0].valueInMinutes;
+        const lastSnapshot =
+          game.snapshots[game.snapshots.length - 1].valueInMinutes;
+        const playedTime = lastSnapshot - firstSnapshot;
+        return {
+          gameId: game.id,
+          name: game.name,
+          appId: game.appId,
+          playedTimeInMinutes: playedTime,
+        };
+      })
       .filter((game) => game && game.playedTimeInMinutes > 0)
       .sort((a, b) => b.playedTimeInMinutes - a.playedTimeInMinutes);
 
-    this.logger.log(`Relatório final contém ${weeklyReport.length} jogos.`);
-    return weeklyReport;
+    this.logger.log(`Relatório final contém ${report.length} jogos.`);
+    return report;
+  }
+
+  async getActivityByDay(steamId: string): Promise<ActivityByDayDto[]> {
+    const user = await this.usersService.findUserBySteamId(steamId);
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado.');
+    }
+
+    const result: { day_of_week: number; total_minutes_played: bigint }[] =
+      await this.prisma.$queryRaw(
+        Prisma.sql`
+          WITH PlaytimeDiffs AS (
+            SELECT
+              "gameId",
+              "createdAt",
+              "valueInMinutes" - LAG("valueInMinutes", 1, "valueInMinutes") OVER (PARTITION BY "gameId" ORDER BY "createdAt") AS minutes_played
+            FROM "PlaytimeSnapshot"
+            WHERE "userId" = ${user.id}
+          )
+          SELECT
+            EXTRACT(DOW FROM "createdAt") AS day_of_week,
+            SUM(minutes_played) AS total_minutes_played
+          FROM PlaytimeDiffs
+          WHERE minutes_played > 0
+          GROUP BY day_of_week
+          ORDER BY total_minutes_played DESC;
+        `,
+      );
+
+    const dayMapping = [
+      'Domingo',
+      'Segunda-feira',
+      'Terça-feira',
+      'Quarta-feira',
+      'Quinta-feira',
+      'Sexta-feira',
+      'Sábado',
+    ];
+
+    const formattedResult = result.map((row) => ({
+      dayOfWeek: dayMapping[row.day_of_week],
+      totalMinutesPlayed: Number(row.total_minutes_played),
+    }));
+
+    return formattedResult;
   }
 }

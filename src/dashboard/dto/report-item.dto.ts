@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class WeeklyReportItemDto {
+export class ReportItemDto {
   @ApiProperty({
     example: 15,
     description: 'O ID interno do jogo no nosso banco de dados.',
