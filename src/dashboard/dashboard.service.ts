@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { WeeklyReportItemDto } from './dto/weekly-report-item.dto';
+import { SummaryDto } from './dto/summary.dto';
 
 @Injectable()
 export class DashboardService {
@@ -16,7 +18,7 @@ export class DashboardService {
     private readonly usersService: UsersService,
   ) {}
 
-  async getSummary(steamId: string) {
+  async getSummary(steamId: string): Promise<SummaryDto> {
     const user = await this.usersService.findUserBySteamId(steamId);
     if (!user) {
       throw new NotFoundException(
@@ -48,8 +50,13 @@ export class DashboardService {
     };
   }
 
-  async getWeeklyReport(steamId: string, date: string) {
-    this.logger.log(`Iniciando getWeeklyReport para steamId: ${steamId}...`);
+  async getWeeklyReport(
+    steamId: string,
+    date: string,
+  ): Promise<WeeklyReportItemDto[]> {
+    this.logger.log(
+      `Iniciando getWeeklyReport para steamId: ${steamId} com data: ${date}`,
+    );
     if (!date) {
       throw new BadRequestException('A data é um parâmetro obrigatório.');
     }
@@ -98,20 +105,41 @@ export class DashboardService {
       `Prisma encontrou ${gamesWithPlaytime.length} jogos com snapshots no período.`,
     );
 
-    const weeklyReport = gamesWithPlaytime
-      .map((game) => {
-        if (game.snapshots.length < 2) return null;
-        const firstSnapshot = game.snapshots[0].valueInMinutes;
-        const lastSnapshot =
-          game.snapshots[game.snapshots.length - 1].valueInMinutes;
-        const playedTime = lastSnapshot - firstSnapshot;
-        return {
-          gameId: game.id,
-          name: game.name,
-          appId: game.appId,
-          playedTimeInMinutes: playedTime,
-        };
-      })
+    if (gamesWithPlaytime.length === 0) {
+      this.logger.warn(
+        'Nenhum jogo retornado pela query do Prisma. Verifique o intervalo de datas e se os dados existem.',
+      );
+      return [];
+    }
+
+    const processedGames = gamesWithPlaytime.map((game) => {
+      if (game.snapshots.length < 2) {
+        this.logger.debug(
+          `Jogo "${game.name}" tem menos de 2 snapshots (${game.snapshots.length}) e será ignorado.`,
+        );
+        return null;
+      }
+
+      const firstSnapshot = game.snapshots[0].valueInMinutes;
+      const lastSnapshot =
+        game.snapshots[game.snapshots.length - 1].valueInMinutes;
+      const playedTime = lastSnapshot - firstSnapshot;
+
+      this.logger.debug(
+        `Jogo: "${game.name}" | Snapshots: ${
+          game.snapshots.length
+        } | Início: ${firstSnapshot} min | Fim: ${lastSnapshot} min | Tempo Jogado: ${playedTime} min`,
+      );
+
+      return {
+        gameId: game.id,
+        name: game.name,
+        appId: game.appId,
+        playedTimeInMinutes: playedTime,
+      };
+    });
+
+    const weeklyReport = processedGames
       .filter((game) => game && game.playedTimeInMinutes > 0)
       .sort((a, b) => b.playedTimeInMinutes - a.playedTimeInMinutes);
 

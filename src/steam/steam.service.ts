@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -39,7 +43,9 @@ export class SteamService {
     try {
       const steamId = this.configService.get<string>('STEAM_ID');
       if (!steamId) {
-        throw new Error('STEAM_ID não encontrado no arquivo .env');
+        throw new InternalServerErrorException(
+          'STEAM_ID não encontrado no arquivo .env',
+        );
       }
 
       const games = await this.getOwnedGames(steamId);
@@ -70,7 +76,9 @@ export class SteamService {
   private async getOwnedGames(steamId: string): Promise<SteamGame[]> {
     const apiKey = this.configService.get<string>('STEAM_API_KEY');
     if (!apiKey) {
-      throw new Error('STEAM_API_KEY não encontrada no arquivo .env');
+      throw new InternalServerErrorException(
+        'STEAM_API_KEY não encontrada no arquivo .env',
+      );
     }
 
     const url = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamId}&format=json&include_appinfo=true`;

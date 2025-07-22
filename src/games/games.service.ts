@@ -1,10 +1,8 @@
-// src/games/games.service.ts
-
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Game as GameModel } from '@prisma/client'; // Importamos o tipo do Prisma
+import { Game as GameModel } from '@prisma/client';
+import { GameHistoryItemDto } from './dto/game-history-item.dto';
 
-// Criamos uma interface para os dados que o serviço espera receber
 interface GameData {
   appId: number;
   name: string;
@@ -39,5 +37,30 @@ export class GamesService {
         valueInMinutes: snapshotData.valueInMinutes,
       },
     });
+  }
+
+  async getHistoryByAppId(appId: number): Promise<GameHistoryItemDto[]> {
+    const game = await this.prisma.game.findUnique({
+      where: { appId },
+    });
+
+    if (!game) {
+      throw new NotFoundException(`Jogo com AppID ${appId} não encontrado.`);
+    }
+
+    const history = await this.prisma.playtimeSnapshot.findMany({
+      where: {
+        gameId: game.id,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      select: {
+        createdAt: true,
+        valueInMinutes: true,
+      },
+    });
+
+    return history;
   }
 }
