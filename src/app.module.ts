@@ -8,6 +8,7 @@ import { SteamModule } from './steam/steam.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { UsersModule } from './users/users.module';
 import { GamesModule } from './games/games.module';
+import { SyncModule } from './sync/sync.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { GamesModule } from './games/games.module';
     GamesModule,
     SteamModule,
     DashboardModule,
+    SyncModule,
   ],
   controllers: [AppController],
   providers: [AppService],

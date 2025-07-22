@@ -8,9 +8,9 @@ generator client {
 }
 
 model User {
-  id        Int      @id @default(autoincrement()) // Chave primária auto-incremental
-  steamId   String   @unique // A ID64 da Steam do usuário, deve ser única
-  name      String?  // Nome do usuário, opcional
+  id        Int      @id @default(autoincrement()) 
+  steamId   String   @unique 
+  name      String?  
 
   snapshots PlaytimeSnapshot[]
 
@@ -19,21 +19,30 @@ model User {
 }
 
 model Game {
-  id    Int    @id @default(autoincrement()) // Chave primária
-  appId Int    @unique // A ID oficial do jogo na Steam, deve ser única
-  name  String // O nome do jogo
+  id    Int    @id @default(autoincrement()) 
+  appId Int    @unique 
+  name  String 
 
   snapshots PlaytimeSnapshot[]
 }
 
 model PlaytimeSnapshot {
-  id             Int      @id @default(autoincrement()) // Chave primária
-  valueInMinutes Int      // O valor do "playtime_forever" em minutos
-  createdAt      DateTime @default(now()) // Data e hora em que o registro foi criado
+  id             Int      @id @default(autoincrement()) 
+  valueInMinutes Int      
+  createdAt      DateTime @default(now()) 
 
   gameId Int
   game   Game @relation(fields: [gameId], references: [id])
 
   userId Int
   user   User @relation(fields: [userId], references: [id])
+}
+
+model SyncLog {
+  id         Int      @id @default(autoincrement())
+  status     String   
+  message    String?  
+  gamesFound Int      
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
 }

@@ -9,6 +9,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { firstValueFrom } from 'rxjs';
 import { UsersService } from '../users/users.service';
 import { GamesService } from '../games/games.service';
+import { SyncService } from '../sync/sync.service';
 
 interface SteamGame {
   appid: number;
@@ -32,6 +33,7 @@ export class SteamService {
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
     private readonly gamesService: GamesService,
+    private readonly syncService: SyncService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM, {
@@ -40,6 +42,8 @@ export class SteamService {
   })
   async fetchDataAndSave() {
     this.logger.log('Tarefa agendada "fetchSteamData" iniciada...');
+    const syncLog = await this.syncService.createLog();
+
     try {
       const steamId = this.configService.get<string>('STEAM_ID');
       if (!steamId) {
@@ -51,14 +55,20 @@ export class SteamService {
       const games = await this.getOwnedGames(steamId);
       if (!games || games.length === 0) {
         this.logger.warn(`Nenhum jogo encontrado para o SteamID ${steamId}.`);
+        await this.syncService.updateLogSuccess(syncLog.id, 0);
         return;
       }
 
       this.logger.log(`Encontrados ${games.length} jogos. Salvando dados...`);
       await this.saveGamesData(games, steamId);
 
+      await this.syncService.updateLogSuccess(syncLog.id, games.length);
       this.logger.log('Tarefa agendada finalizada com sucesso!');
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Erro desconhecido';
+      await this.syncService.updateLogFailure(syncLog.id, errorMessage);
+
       if (error instanceof Error) {
         this.logger.error(
           `Ocorreu uma falha na tarefa agendada: ${error.message}`,
