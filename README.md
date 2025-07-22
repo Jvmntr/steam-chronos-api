@@ -12,7 +12,7 @@
 </div>
 
 <img src="./project_git.jpg" alt="Imagem do projeto">
-<h4 align="center"><a href="https://jvmntr.github.io/portfolio/">Clique para visitar a documentação da API.</a></h4>
+<h4 align="center"><a href="https://steam-chronos-api.onrender.com/api/docs">Clique para visitar a documentação da API.</a></h4>
 
 > Para esta versão inicial, a API foi projetada para um único usuário (configurado via variáveis de ambiente), com foco na complexidade da coleta e análise dos dados. A implementação de um sistema multi-usuário com autenticação (OAuth, JWT) é um passo planejado para o futuro.
 
